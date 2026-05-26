@@ -1,0 +1,15 @@
+{
+  "name": "zaoyin",
+  "version": "1.0.0",
+  "private": false,
+  "license": "MIT",
+  "description": "Self-hosted video and image generation workbench",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.3"
+  }
+}

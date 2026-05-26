@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>造影工作台 — 视频与图像生成</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">造</span>
+    <span class="brand-name">造影工作台<span class="dot">.</span></span>
+    <span class="brand-sub">视频 · 图像 · 提示词增强</span>
+  </div>
+  <nav class="modes">
+    <button class="mode is-active" data-mode="video">视频</button>
+    <span class="mode-sep">·</span>
+    <button class="mode" data-mode="image">图像</button>
+  </nav>
+  <div class="utility">
+    <button class="util-btn cmdk-trigger" id="openCmdk" title="命令面板（Ctrl/⌘ + K）">
+      <span>⌘ K</span>
+    </button>
+    <button class="util-btn guide-btn" id="openGuide" title="使用教程">
+      <span>使用教程</span>
+    </button>
+    <button class="util-btn theme-toggle" id="themeToggle" title="主题">
+      <span class="theme-glyph" id="themeGlyph">☉</span>
+    </button>
+    <span class="upstream-pill" id="upstreamPill">
+      <span class="upstream-dot"></span>
+      <span class="upstream-text" id="upstreamText">检测中…</span>
+    </span>
+    <button class="util-btn" id="openSettings" title="密钥与配置">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="8" cy="8" r="2.6"/>
+        <path d="M8 .8v2.4M8 12.8v2.4M.8 8h2.4M12.8 8h2.4M2.9 2.9l1.7 1.7M11.4 11.4l1.7 1.7M2.9 13.1l1.7-1.7M11.4 4.6l1.7-1.7"/>
+      </svg>
+      <span>密钥</span>
+    </button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="kicker">栏目</div>
+      <ul class="nav">
+        <li><button class="nav-item is-active" data-pane="compose">▸ 构图</button></li>
+        <li><button class="nav-item" data-pane="chat">▸ 对话 <span class="nav-count" id="navChatCount">0</span></button></li>
+        <li><button class="nav-item" data-pane="queue">▸ 任务 <span class="nav-count" id="navQueueCount">0</span></button></li>
+        <li><button class="nav-item" data-pane="vault">▸ 档案 <span class="nav-count" id="navVaultCount">0</span></button></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="kicker">套式</div>
+      <ul class="recipes" id="recipeList">
+        <li><button class="recipe" data-recipe="cinematic">电影感 · 黄金时刻</button></li>
+        <li><button class="recipe" data-recipe="product">产品 · 转台展示</button></li>
+        <li><button class="recipe" data-recipe="portrait">人物 · 自然光特写</button></li>
+        <li><button class="recipe" data-recipe="poster">海报 · 极简霓虹</button></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="kicker">
+        <span>提示词库</span>
+        <button class="kicker-add" id="lib-add" title="保存当前 prompt 入库">+</button>
+      </div>
+      <ul class="recipes" id="libList"></ul>
+    </div>
+    <div class="sidebar-section footnote">
+      <div class="kicker">期号</div>
+      <p class="colophon">第 <span id="editionNo">001</span> 号 · <span id="editionDate"></span></p>
+      <p class="colophon-meta">Sora V3 · Veo 3.1 · gpt-image-2 · nanobanana</p>
+    </div>
+  </aside>
+
+  <!-- 构图 -->
+  <section class="pane is-active" id="pane-compose">
+    <article class="masthead">
+      <div class="masthead-meta">
+        <span class="folio" id="folioNo">№ 001</span>
+        <span class="folio-sep">/</span>
+        <span class="folio-mode" id="folioMode">视频</span>
+        <span class="folio-sep">/</span>
+        <time class="folio-time" id="folioTime"></time>
+      </div>
+      <h1 class="hed" id="hed">起稿一段动态影像</h1>
+      <p class="dek" id="dek">通过提示词、参考图与精细参数，生成视频或图像。所有任务会归档到右下的「任务」与「档案」。</p>
+    </article>
+
+    <!-- ===== 视频表单 ===== -->
+    <form class="composer" id="videoForm">
+      <div class="grid">
+        <div class="field field-wide">
+          <label class="lbl">
+            提示词
+            <span class="lbl-tools">
+              <button type="button" class="link link-tool" data-optimize="vPrompt" data-kind="video">优化 ↗</button>
+              <button type="button" class="link link-tool" data-translate="vPrompt">翻译为英文 ⇄</button>
+              <button type="button" class="link link-tool" data-export-code="video">导出代码 ⌘</button>
+            </span>
+          </label>
+          <textarea class="ta" id="vPrompt" rows="5" placeholder="例如：一段夜晚霓虹雨街的电影感跟拍镜头，慢推进，35mm 颗粒感"></textarea>
+          <div class="aux">
+            <span class="hint" id="vPromptCount">共 0 字</span>
+            <button type="button" class="link" data-fill="vPrompt" data-text="一段夜晚霓虹雨街的电影感跟拍镜头，慢推进，浅景深，雨水反光">填入示例</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">引擎</label>
+          <div class="seg" id="vProvider">
+            <button type="button" class="seg-opt is-active" data-val="sora">Sora V3</button>
+            <button type="button" class="seg-opt" data-val="veo">Veo 3.1</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">模型</label>
+          <select class="sel" id="vModel"></select>
+        </div>
+
+        <div class="field">
+          <label class="lbl">尺寸</label>
+          <select class="sel" id="vSize"></select>
+        </div>
+
+        <div class="field" id="vSecondsWrap">
+          <label class="lbl">时长 <span class="muted">（5–15 秒）</span></label>
+          <input class="inp" id="vSeconds" type="number" min="5" max="15" step="1" value="7">
+        </div>
+
+        <div class="field" id="vAspectWrap" hidden>
+          <label class="lbl">画幅比例</label>
+          <div class="seg">
+            <button type="button" class="seg-opt is-active" data-val="16:9">16 : 9</button>
+            <button type="button" class="seg-opt" data-val="9:16">9 : 16</button>
+          </div>
+          <input type="hidden" id="vAspect" value="16:9">
+        </div>
+
+        <div class="field" id="vAudioWrap" hidden>
+          <label class="lbl">音轨</label>
+          <div class="toggle">
+            <label><input type="checkbox" id="vAudio"> <span>生成音频（仅 Veo）</span></label>
+          </div>
+        </div>
+
+        <div class="field field-wide" id="vNegativeWrap" hidden>
+          <label class="lbl">反向提示 <span class="muted">（可选）</span></label>
+          <input class="inp" id="vNegative" placeholder="如：文字、水印、模糊、低质量">
+        </div>
+
+        <div class="field field-wide">
+          <label class="lbl">参考图 <span class="muted" id="vRefHint">最多 4 张</span></label>
+          <div class="dropzone" id="vDrop">
+            <input type="file" id="vFile" accept="image/*" multiple hidden>
+            <div class="dz-row">
+              <span class="dz-icon">+</span>
+              <span class="dz-text">拖入图片，或</span>
+              <button type="button" class="link" id="vFilePick">点击选择</button>
+              <span class="dz-or">或</span>
+              <input class="inp dz-url" id="vRefUrl" placeholder="粘贴图片 URL（可多个，空格/逗号/换行分隔），回车添加">
+            </div>
+            <div class="thumbs" id="vThumbs"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="vSubmit">
+          <span class="btn-label">生成</span>
+          <span class="btn-dot"></span>
+        </button>
+        <button type="button" class="btn-ghost" id="vReset">重置</button>
+        <button type="button" class="btn-ghost" id="vAbOpen" title="批量并行多个参数变体">A/B 并行 · <span class="ab-badge" id="vAbBadge">关</span></button>
+        <span class="action-aux" id="vStatus"></span>
+      </div>
+    </form>
+
+    <!-- ===== 图像表单 ===== -->
+    <form class="composer is-hidden" id="imageForm">
+      <div class="grid">
+        <div class="field field-wide">
+          <label class="lbl">
+            提示词
+            <span class="lbl-tools">
+              <button type="button" class="link link-tool" data-optimize="iPrompt" data-kind="image">优化 ↗</button>
+              <button type="button" class="link link-tool" data-translate="iPrompt">翻译为英文 ⇄</button>
+              <button type="button" class="link link-tool" data-export-code="image">导出代码 ⌘</button>
+            </span>
+          </label>
+          <textarea class="ta" id="iPrompt" rows="5" placeholder="例如：一张极简的黑猫霓虹海报，构图简洁，丝网印刷质感"></textarea>
+          <div class="aux">
+            <span class="hint" id="iPromptCount">共 0 字</span>
+            <button type="button" class="link" data-fill="iPrompt" data-text="一张极简的黑猫霓虹海报，构图简洁，丝网印刷质感">填入示例</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">引擎</label>
+          <div class="seg" id="iProvider">
+            <button type="button" class="seg-opt is-active" data-val="openai">OpenAI · gpt-image-2</button>
+            <button type="button" class="seg-opt" data-val="gemini">Gemini · nanobanana</button>
+          </div>
+        </div>
+
+        <div class="field" id="iEndpointWrap">
+          <label class="lbl">模式</label>
+          <div class="seg" id="iEndpoint">
+            <button type="button" class="seg-opt is-active" data-val="generations">文生图</button>
+            <button type="button" class="seg-opt" data-val="edits">图生图</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl">模型</label>
+          <select class="sel" id="iModel"></select>
+        </div>
+
+        <div class="field" id="iSizeWrap">
+          <label class="lbl">尺寸</label>
+          <select class="sel" id="iSize"></select>
+        </div>
+
+        <div class="field" id="iAspectWrap" hidden>
+          <label class="lbl">画幅比例</label>
+          <select class="sel" id="iAspect"></select>
+        </div>
+
+        <div class="field" id="iImageSizeWrap" hidden>
+          <label class="lbl">分辨率档</label>
+          <div class="seg" id="iImageSizeSeg">
+            <button type="button" class="seg-opt is-active" data-val="1K">1K</button>
+            <button type="button" class="seg-opt" data-val="2K">2K</button>
+            <button type="button" class="seg-opt" data-val="4K">4K</button>
+          </div>
+        </div>
+
+        <div class="field" id="iQualityWrap">
+          <label class="lbl">画质</label>
+          <div class="seg" id="iQuality">
+            <button type="button" class="seg-opt is-active" data-val="low">省时</button>
+            <button type="button" class="seg-opt" data-val="medium">中等</button>
+            <button type="button" class="seg-opt" data-val="high">精细</button>
+          </div>
+        </div>
+
+        <div class="field" id="iCountWrap">
+          <label class="lbl">张数 <span class="muted">（gpt-image-2 单次最多 6 张）</span></label>
+          <div class="seg" id="iCount">
+            <button type="button" class="seg-opt is-active" data-val="1">1</button>
+            <button type="button" class="seg-opt" data-val="2">2</button>
+            <button type="button" class="seg-opt" data-val="3">3</button>
+            <button type="button" class="seg-opt" data-val="4">4</button>
+            <button type="button" class="seg-opt" data-val="6">6</button>
+          </div>
+        </div>
+
+        <div class="field field-wide">
+          <label class="lbl">参考图 <span class="muted" id="iRefHint">最多 6 张</span></label>
+          <div class="dropzone" id="iDrop">
+            <input type="file" id="iFile" accept="image/*" multiple hidden>
+            <div class="dz-row">
+              <span class="dz-icon">+</span>
+              <span class="dz-text">拖入图片，或</span>
+              <button type="button" class="link" id="iFilePick">点击选择</button>
+              <span class="dz-or">或</span>
+              <input class="inp dz-url" id="iRefUrl" placeholder="粘贴图片 URL（可多个，空格/逗号/换行分隔），回车添加">
+            </div>
+            <div class="thumbs" id="iThumbs"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="iSubmit">
+          <span class="btn-label">生成</span>
+          <span class="btn-dot"></span>
+        </button>
+        <button type="button" class="btn-ghost" id="iReset">重置</button>
+        <button type="button" class="btn-ghost" id="iAbOpen" title="批量并行多个参数变体">A/B 并行 · <span class="ab-badge" id="iAbBadge">关</span></button>
+        <span class="action-aux" id="iStatus"></span>
+      </div>
+    </form>
+
+    <!-- ===== 最近生成（compose 页底部）===== -->
+    <article class="recent-bar" id="recentBar" hidden>
+      <div class="recent-head">
+        <span class="folio">最近生成</span>
+        <button type="button" class="link" id="recentGoto">在「任务」中查看全部 →</button>
+      </div>
+      <div class="recent-grid" id="recentGrid"></div>
+    </article>
+  </section>
+
+  <!-- 任务 -->
+  <section class="pane" id="pane-queue">
+    <article class="masthead">
+      <div class="masthead-meta"><span class="folio">任务</span></div>
+      <h1 class="hed">进行中与历史</h1>
+      <p class="dek">所有提交的任务按时间倒序排列。视频任务会自动轮询，图像任务同步返回。点击任意一行查看详情。</p>
+    </article>
+    <div class="queue-toolbar">
+      <div class="seg" id="queueFilter">
+        <button type="button" class="seg-opt is-active" data-val="all">全部</button>
+        <button type="button" class="seg-opt" data-val="video">视频</button>
+        <button type="button" class="seg-opt" data-val="image">图像</button>
+        <button type="button" class="seg-opt" data-val="active">进行中</button>
+        <button type="button" class="seg-opt" data-val="completed">已完成</button>
+        <button type="button" class="seg-opt" data-val="failed">失败</button>
+      </div>
+      <div class="queue-tools">
+        <div class="seg" id="queueView">
+          <button type="button" class="seg-opt is-active" data-val="list">列表</button>
+          <button type="button" class="seg-opt" data-val="grid">网格</button>
+        </div>
+        <button class="btn-ghost" id="queueRefresh" title="同步任务状态，不刷新浏览器">刷新状态</button>
+        <button class="btn-ghost" id="queueClear">清理已结束</button>
+      </div>
+    </div>
+    <ol class="queue" id="queueList"></ol>
+    <div class="queue-grid" id="queueGrid" hidden></div>
+  </section>
+
+  <!-- 对话 -->
+  <section class="pane pane-chat" id="pane-chat">
+    <div class="chat-wrap">
+      <aside class="chat-sessions">
+        <div class="chat-sessions-head">
+          <span class="kicker">会话</span>
+          <button class="kicker-add" id="chatNew" title="新建对话">+</button>
+        </div>
+        <ul class="chat-list" id="chatList"></ul>
+      </aside>
+      <section class="chat-main">
+        <article class="masthead chat-masthead">
+          <div class="masthead-meta">
+            <span class="folio" id="chatTitle">未命名对话</span>
+            <button type="button" class="link chat-rename" id="chatRename">重命名</button>
+            <button type="button" class="link chat-del" id="chatDelete">删除</button>
+            <button type="button" class="link chat-debug-toggle" id="chatDebugToggle">调试 ▾</button>
+          </div>
+          <p class="dek chat-dek">告诉我你想要什么，我会调用工具帮你生成。比如「做一张冬日图书馆海报」，「给我 4 个不同风格的版本」，「这张图改成夜景」。</p>
+        </article>
+        <div class="chat-debug" id="chatDebug" hidden>
+          <div class="chat-debug-head">
+            <span class="kicker">LLM 调试 — 最近的请求 / 响应（在这里可以看上下文和原始数据流）</span>
+            <button type="button" class="link" id="chatDebugClear">清空</button>
+            <button type="button" class="link" id="chatDebugClose">关闭</button>
+          </div>
+          <ol class="chat-debug-list" id="chatDebugList">
+            <li class="chat-debug-empty">尚无调用记录。发一条消息后会出现。</li>
+          </ol>
+        </div>
+        <div class="chat-stream" id="chatStream"></div>
+        <form class="chat-input-bar" id="chatForm">
+          <div class="slash-menu" id="slashMenu" hidden></div>
+          <textarea class="ta chat-input" id="chatInput" rows="2" placeholder="跟我说想做什么；输入 / 显示命令；Enter 发送（Shift+Enter 换行）"></textarea>
+          <div class="context-meter" id="contextMeter">
+            <span class="ctx-bar"><span class="ctx-fill" id="ctxFill"></span></span>
+            <span class="ctx-text" id="ctxText">—</span>
+          </div>
+          <div class="chat-input-tools">
+            <button type="button" class="link link-tool" id="chatAttachBtn">附参考图</button>
+            <input type="file" id="chatAttach" accept="image/*" multiple hidden>
+            <span class="hint" id="chatAttachInfo"></span>
+            <span class="action-aux" id="chatStatus"></span>
+            <select class="chat-profile-select chat-profile-inline" id="chatProfileSelect" title="切换 LLM 配置"></select>
+            <button type="submit" class="btn-primary" id="chatSend">
+              <span class="btn-label">发送</span>
+              <span class="btn-dot"></span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </section>
+
+  <!-- 档案 -->
+  <section class="pane" id="pane-vault">
+    <article class="masthead">
+      <div class="masthead-meta"><span class="folio">档案</span></div>
+      <h1 class="hed">已完成的作品</h1>
+      <p class="dek">已完成的视频与图像。鼠标悬停视频会预览播放，点击可查看详情或下载。</p>
+    </article>
+    <div class="vault-toolbar">
+      <button type="button" class="btn-ghost" id="vaultSelectMode">进入多选</button>
+      <span class="action-aux" id="vaultSelectInfo"></span>
+    </div>
+    <div class="vault-grid" id="vaultGrid"></div>
+    <div class="vault-actions" id="vaultActions" hidden>
+      <span class="vault-actions-label">已选 <strong id="vaultSelCount">0</strong> 项</span>
+      <button class="btn-primary" id="vaultDownload">打包下载 ZIP</button>
+      <button class="btn-ghost" id="vaultSelectAll">全选</button>
+      <button class="btn-ghost" id="vaultSelectClear">取消</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>造影工作台 · 视频与图像生成 · 全部配置仅保存在本地浏览器</span>
+  <span>v1.0</span>
+</footer>
+
+<!-- ===== 使用教程抽屉 ===== -->
+<div class="drawer-mask" id="guideMask" hidden></div>
+<aside class="drawer guide-drawer" id="guideDrawer" hidden>
+  <div class="drawer-head">
+    <h2>使用教程</h2>
+    <button class="util-btn" id="closeGuide">关闭 ✕</button>
+  </div>
+  <div class="drawer-body md-content" id="guideBody"></div>
+</aside>
+
+<!-- ===== 设置抽屉 ===== -->
+<div class="drawer-mask" id="drawerMask" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-hidden="true">
+  <div class="drawer-resize" id="drawerResize"></div>
+  <div class="drawer-head">
+    <h2>密钥与配置</h2>
+    <button class="util-btn" id="closeSettings">关闭 ✕</button>
+  </div>
+  <div class="drawer-body">
+    <section class="form-block">
+      <div class="kicker">接口密钥</div>
+      <p class="muted">字段保存在浏览器本地（localStorage），不会上传任何后端。留空则使用容器环境变量中的默认值（如已配置）。</p>
+      <label class="lbl">视频接口 Token</label>
+      <input class="inp" id="cfgVideoToken" type="password" placeholder="Bearer token，用于视频 API">
+      <label class="lbl">图像接口 Token</label>
+      <input class="inp" id="cfgImageToken" type="password" placeholder="Bearer / x-goog-api-key">
+    </section>
+    <section class="form-block">
+      <div class="kicker">提示词增强 / Agent <span class="tag-opt">可选</span></div>
+      <p class="muted">支持多个 LLM 配置，对话页可一键切换。可同时存 OpenAI、Claude、Gemini、本地 Ollama、各种镜像，针对不同任务用不同模型。</p>
+      <label class="toggle"><input type="checkbox" id="cfgLlmEnabled"><span>启用提示词增强 / 对话 Agent</span></label>
+
+      <div class="profile-bar">
+        <label class="lbl">当前配置</label>
+        <div class="profile-row">
+          <select class="sel" id="cfgProfileSelect"></select>
+          <button type="button" class="btn-ghost profile-btn" id="cfgProfileNew">+ 新建</button>
+          <button type="button" class="btn-ghost profile-btn" id="cfgProfileDel">删除</button>
+        </div>
+      </div>
+
+      <label class="lbl">配置名称</label>
+      <input class="inp" id="cfgProfileName" placeholder="例如：GPT-5 主力 / Claude Sonnet 备用">
+
+      <label class="lbl">协议</label>
+      <div class="seg" id="cfgLlmProtocol">
+        <button type="button" class="seg-opt is-active" data-val="chat_completions">OpenAI · Chat Completions</button>
+        <button type="button" class="seg-opt" data-val="responses">OpenAI · Responses（GPT-5 系列）</button>
+        <button type="button" class="seg-opt" data-val="anthropic">Anthropic · Messages（Claude 原生）</button>
+        <button type="button" class="seg-opt" data-val="gemini">Google · Gemini 原生</button>
+      </div>
+
+      <label class="lbl">接口地址（Base URL）</label>
+      <input class="inp" id="cfgLlmBase" placeholder="https://api.openai.com / https://api.anthropic.com / https://generativelanguage.googleapis.com / 你的镜像站">
+      <label class="lbl">API 密钥</label>
+      <input class="inp" id="cfgLlmKey" type="password" placeholder="sk-...">
+      <label class="lbl">
+        模型
+        <button type="button" class="link link-tool" id="cfgFetchModels" title="从上游拉取可用模型列表">↻ 拉取列表</button>
+      </label>
+      <input class="inp" id="cfgLlmModel" placeholder="如 gpt-4o-mini / gpt-5 / claude-sonnet-4-6 / gemini-2.0-flash">
+      <select class="sel" id="cfgModelList" hidden></select>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="lbl">上下文窗口 <span class="muted">(保留最近 N 条对话)</span></label>
+          <select class="sel" id="cfgContextWindow">
+            <option value="all">全部</option>
+            <option value="50">最近 50 条</option>
+            <option value="30">最近 30 条</option>
+            <option value="20">最近 20 条</option>
+            <option value="10">最近 10 条</option>
+            <option value="6">最近 6 条</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">模型上限 <span class="muted">(tokens，用于显示)</span></label>
+          <input class="inp" id="cfgContextLimit" type="number" min="1000" step="1000" placeholder="32000 / 128000 / 200000">
+        </div>
+      </div>
+
+      <label class="lbl">思考强度 <span class="muted">(Claude / GPT-5 / DeepSeek-R1 / Gemini 2.5 支持)</span></label>
+      <div class="seg" id="cfgThinkingMode">
+        <button type="button" class="seg-opt is-active" data-val="auto">自动</button>
+        <button type="button" class="seg-opt" data-val="off">关闭</button>
+        <button type="button" class="seg-opt" data-val="low">低</button>
+        <button type="button" class="seg-opt" data-val="medium">中</button>
+        <button type="button" class="seg-opt" data-val="high">高</button>
+      </div>
+
+      <label class="lbl">人设 system prompt <span class="muted">（留空将使用内置规则）</span></label>
+      <textarea class="ta" id="cfgLlmPersona" rows="3" placeholder="（可留空，使用内置 Agent 人设）"></textarea>
+    </section>
+    <section class="form-block">
+      <div class="kicker">代理目标 <span class="tag-opt">只读</span></div>
+      <p class="muted">由后端容器环境变量决定，不在前端修改 — 此处仅显示当前生效的值。</p>
+      <label class="lbl">视频上游</label>
+      <input class="inp" id="cfgVideoUpstream" disabled>
+      <label class="lbl">图像上游</label>
+      <input class="inp" id="cfgImageUpstream" disabled>
+    </section>
+    <section class="form-block">
+      <div class="kicker">行为</div>
+      <label class="toggle"><input type="checkbox" id="cfgAutoPoll" checked><span>自动轮询视频任务状态</span></label>
+      <label class="toggle"><input type="checkbox" id="cfgAutoVault" checked><span>完成后自动归档到档案</span></label>
+    </section>
+    <div class="drawer-actions">
+      <button class="btn-primary" id="cfgSave">保存</button>
+      <button class="btn-ghost" id="cfgWipe">清空本地数据</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== 提示条 ===== -->
+<div class="toast" id="toast" hidden></div>
+
+<!-- ===== 任务详情弹窗 ===== -->
+<div class="modal-mask" id="modalMask" hidden></div>
+<div class="modal" id="modal" hidden>
+  <div class="modal-head">
+    <span class="folio" id="mdFolio">№ 000</span>
+    <span class="folio-sep">/</span>
+    <span id="mdKind">视频</span>
+    <button class="util-btn modal-close" id="modalClose">关闭 ✕</button>
+  </div>
+  <div class="modal-body" id="modalBody"></div>
+</div>
+
+<!-- ===== 通用对话框（替换 confirm / prompt） ===== -->
+<div class="dialog-mask" id="dialogMask" hidden></div>
+<div class="dialog" id="dialog" hidden role="dialog" aria-modal="true">
+  <div class="dialog-head" id="dialogTitle">提示</div>
+  <div class="dialog-body" id="dialogBody"></div>
+  <div class="dialog-actions" id="dialogActions"></div>
+</div>
+
+<!-- ===== 提示词增强浮窗 ===== -->
+<div class="popover" id="llmPop" hidden>
+  <div class="pop-head">
+    <span class="kicker">提示词建议</span>
+    <button class="util-btn" id="llmPopClose">关闭 ✕</button>
+  </div>
+  <div class="pop-body">
+    <div class="pop-section">
+      <div class="md-key">原文</div>
+      <div class="md-val mono" id="llmOrig"></div>
+    </div>
+    <div class="pop-section">
+      <div class="md-key">建议</div>
+      <textarea class="ta" id="llmOut" rows="6"></textarea>
+    </div>
+    <div class="pop-actions">
+      <button class="btn-primary" id="llmAccept">替换原提示词</button>
+      <button class="btn-ghost" id="llmRetry">再生成一次</button>
+      <span class="action-aux" id="llmAux"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 命令面板 ===== -->
+<div class="cmdk-mask" id="cmdkMask" hidden></div>
+<div class="cmdk" id="cmdk" hidden>
+  <div class="cmdk-head">
+    <span class="cmdk-prefix">⌘K</span>
+    <input class="cmdk-input" id="cmdkInput" type="text" placeholder="搜索命令、套式、任务历史…" autocomplete="off">
+    <span class="cmdk-hint">↑↓ 选择 · Enter 执行 · Esc 关闭</span>
+  </div>
+  <div class="cmdk-list" id="cmdkList"></div>
+</div>
+
+<!-- ===== 变量模板填入浮窗 ===== -->
+<div class="popover" id="varPop" hidden>
+  <div class="pop-head">
+    <span class="kicker">填入变量 <span id="varTitle" class="muted"></span></span>
+    <button class="util-btn" id="varClose">关闭 ✕</button>
+  </div>
+  <div class="pop-body">
+    <div id="varFields"></div>
+    <div class="pop-section">
+      <div class="md-key">预览</div>
+      <div class="md-val mono" id="varPreview"></div>
+    </div>
+    <div class="pop-actions">
+      <button class="btn-primary" id="varApply">填入提示词</button>
+      <span class="action-aux">变量值不会保存</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 代码片段浮窗 ===== -->
+<div class="popover popover-wide" id="codePop" hidden>
+  <div class="pop-head">
+    <span class="kicker">导出为代码</span>
+    <div class="seg" id="codeLang">
+      <button type="button" class="seg-opt is-active" data-val="curl">curl</button>
+      <button type="button" class="seg-opt" data-val="python">Python</button>
+      <button type="button" class="seg-opt" data-val="js">JavaScript</button>
+    </div>
+    <button class="util-btn" id="codeClose">关闭 ✕</button>
+  </div>
+  <div class="pop-body">
+    <pre class="code-block" id="codeOut"></pre>
+    <div class="pop-actions">
+      <button class="btn-primary" id="codeCopy">复制到剪贴板</button>
+      <span class="action-aux" id="codeAux">提示：请把 $TOKEN 换成你的密钥后运行</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== A/B 并行配置浮窗 ===== -->
+<div class="popover" id="abPop" hidden>
+  <div class="pop-head">
+    <span class="kicker">A/B 并行 · <span id="abMode">视频</span></span>
+    <button class="util-btn" id="abClose">关闭 ✕</button>
+  </div>
+  <div class="pop-body">
+    <p class="muted ab-tip">勾选一个或多个维度，每个维度选 2-4 个候选值，提交时会取笛卡尔积并行生成。例如：勾「画质」选「省时 / 精细」，勾「尺寸」选「1024×1024 / 1536×1024」，共会跑 4 个变体。</p>
+    <div id="abFields"></div>
+    <div class="ab-summary">
+      <span class="kicker">总变体数</span>
+      <span class="ab-count" id="abCount">1</span>
+      <span class="muted">个并行任务</span>
+    </div>
+    <div class="pop-actions">
+      <label class="toggle"><input type="checkbox" id="abEnabled"><span>启用 A/B 并行</span></label>
+      <span class="action-aux">下次生成将提交全部变体</span>
+    </div>
+  </div>
+</div>
+
+<script src="./app.js?v=20260526-2" type="module"></script>
+</body>
+</html>
