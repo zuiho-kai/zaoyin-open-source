@@ -4,6 +4,8 @@ Self-hosted video and image generation workbench.
 
 Zaoyin is a browser-first workspace for generating images, videos, and prompt-assisted chat workflows through OpenAI-compatible and Gemini-compatible upstream APIs. User settings, tokens, task history, prompts, and generated assets are stored in the browser's IndexedDB by default.
 
+![Zaoyin compose workspace](docs/screenshots/compose.png)
+
 ## Features
 
 - Image generation and image editing through compatible upstream APIs
@@ -12,6 +14,16 @@ Zaoyin is a browser-first workspace for generating images, videos, and prompt-as
 - Optional LLM agent for prompt optimization and tool-assisted workflows
 - Server-side proxy for CORS, range requests, and short-lived image response recovery
 - Browser-local storage for user data and generated assets
+
+## Screenshots
+
+| Task queue | Archive |
+|---|---|
+| ![Task queue grid](docs/screenshots/queue.png) | ![Archive view](docs/screenshots/vault.png) |
+
+| Agent workspace |
+|---|
+| ![Agent chat workspace](docs/screenshots/chat.png) |
 
 ## Requirements
 
